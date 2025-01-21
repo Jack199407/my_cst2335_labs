@@ -87,3 +87,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  assets:
+    - images/question-mark.jpg
+    - images/light-bulb.jpg
+    - images/stop-sign.jpg
