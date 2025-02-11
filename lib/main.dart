@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(MyApp());
@@ -31,137 +32,165 @@ class _LoginPageState extends State<LoginPage> {
     _loadSavedCredentials();
   }
 
-  // Load saved credentials from SharedPreferences
   void _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       loginController.text = prefs.getString('username') ?? '';
       passwordController.text = prefs.getString('password') ?? '';
-      if (loginController.text.isNotEmpty && passwordController.text.isNotEmpty) {
-        _showSnackbar();
-      }
     });
   }
 
-  // Show a Snackbar with an Undo button
-  void _showSnackbar() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Saved login info loaded'),
-        action: SnackBarAction(
-          label: 'Undo',
-          onPressed: () {
-            setState(() {
-              loginController.clear();
-              passwordController.clear();
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  // Save username and password in SharedPreferences
   void _saveCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('username', loginController.text);
     await prefs.setString('password', passwordController.text);
   }
 
-  // Clear saved credentials from SharedPreferences
-  void _clearCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('username');
-    await prefs.remove('password');
-  }
-
-  // Show an AlertDialog asking the user if they want to save login info
-  void _showSaveDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Save Login Info'),
-        content: Text('Do you want to save your username and password for next time?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _clearCredentials();
-              Navigator.of(context).pop();
-            },
-            child: Text('No'),
-          ),
-          TextButton(
-            onPressed: () {
-              _saveCredentials();
-              Navigator.of(context).pop();
-            },
-            child: Text('Yes'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Handle the login button click
   void _handleLogin() {
-    String password = passwordController.text;
-
-    setState(() {
-      if (password == 'QWERTY123') {
-        imageSource = 'images/light-bulb.jpg';
-      } else {
+    if (passwordController.text == 'QWERTY123') {
+      _saveCredentials();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfilePage(username: loginController.text),
+        ),
+      );
+    } else {
+      setState(() {
         imageSource = 'images/stop-sign.jpg';
-      }
-    });
-
-    print('Password: $password');
-
-    // Show AlertDialog asking to save login info
-    _showSaveDialog();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid credentials')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Flutter Demo Home Page'),
-      ),
+      appBar: AppBar(title: Text('Login Page')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Login input field
             TextField(
               controller: loginController,
-              decoration: InputDecoration(
-                labelText: 'Login',
-                border: OutlineInputBorder(),
-              ),
+              decoration: InputDecoration(labelText: 'Login'),
             ),
-            SizedBox(height: 16.0),
-            // Password input field
             TextField(
               controller: passwordController,
-              obscureText: true, // Hide password content
-              decoration: InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
+              obscureText: true,
+              decoration: InputDecoration(labelText: 'Password'),
             ),
-            SizedBox(height: 16.0),
-            // Login button
+            SizedBox(height: 20),
             ElevatedButton(
               onPressed: _handleLogin,
               child: Text('Login'),
             ),
             SizedBox(height: 16.0),
-            // Dynamic image based on password
             Image.asset(
               imageSource,
               height: 300,
               width: 300,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ProfilePage extends StatefulWidget {
+  final String username;
+  ProfilePage({required this.username});
+
+  @override
+  _ProfilePageState createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final TextEditingController firstNameController = TextEditingController();
+  final TextEditingController lastNameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      firstNameController.text = prefs.getString('firstName') ?? '';
+      lastNameController.text = prefs.getString('lastName') ?? '';
+      phoneController.text = prefs.getString('phone') ?? '';
+      emailController.text = prefs.getString('email') ?? '';
+    });
+  }
+
+  void _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('firstName', firstNameController.text);
+    await prefs.setString('lastName', lastNameController.text);
+    await prefs.setString('phone', phoneController.text);
+    await prefs.setString('email', emailController.text);
+  }
+
+  void _launchPhone() async {
+    final Uri url = Uri.parse('tel:${phoneController.text}');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
+  void _launchSMS() async {
+    final Uri url = Uri.parse('sms:${phoneController.text}');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
+  void _launchEmail() async {
+    final Uri url = Uri.parse('mailto:${emailController.text}');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Profile Page')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Text('Welcome Back, ${widget.username}!', style: TextStyle(fontSize: 20)),
+            TextField(controller: firstNameController, decoration: InputDecoration(labelText: 'First Name')),
+            TextField(controller: lastNameController, decoration: InputDecoration(labelText: 'Last Name')),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(controller: phoneController, decoration: InputDecoration(labelText: 'Phone Number')),
+                ),
+                IconButton(icon: Icon(Icons.call), onPressed: _launchPhone),
+                IconButton(icon: Icon(Icons.message), onPressed: _launchSMS),
+              ],
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(controller: emailController, decoration: InputDecoration(labelText: 'Email Address')),
+                ),
+                IconButton(icon: Icon(Icons.email), onPressed: _launchEmail),
+              ],
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _saveData,
+              child: Text('Save Data'),
             ),
           ],
         ),
