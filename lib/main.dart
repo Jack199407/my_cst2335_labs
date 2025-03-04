@@ -1,200 +1,124 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'database/app_database.dart';
+import 'models/todo_item.dart';
+import 'dao/todo_dao.dart';
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final database =
+  await $FloorAppDatabase.databaseBuilder('app_database.db').build();
+  final dao = database.toDoDao;
+
+  runApp(MyApp(dao: dao));
 }
 
 class MyApp extends StatelessWidget {
+  final ToDoDao dao;
+
+  MyApp({required this.dao});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Local Storage Demo',
-      home: LoginPage(),
+      debugShowCheckedModeBanner: false,
+      title: 'To-Do List',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: ToDoListScreen(dao: dao),
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
+class ToDoListScreen extends StatefulWidget {
+  final ToDoDao dao;
+
+  ToDoListScreen({required this.dao});
+
   @override
-  _LoginPageState createState() => _LoginPageState();
+  _ToDoListScreenState createState() => _ToDoListScreenState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final TextEditingController loginController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  String imageSource = 'images/question-mark.jpg';
+class _ToDoListScreenState extends State<ToDoListScreen> {
+  late Future<List<ToDoItem>> todoItems;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    todoItems = widget.dao.getAllToDos();
   }
 
-  void _loadSavedCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      loginController.text = prefs.getString('username') ?? '';
-      passwordController.text = prefs.getString('password') ?? '';
-    });
-  }
-
-  void _saveCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('username', loginController.text);
-    await prefs.setString('password', passwordController.text);
-  }
-
-  void _handleLogin() {
-    if (passwordController.text == 'QWERTY123') {
-      _saveCredentials();
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProfilePage(username: loginController.text),
-        ),
-      );
-    } else {
+  void _addToDo(String title) async {
+    if (title.isNotEmpty) {
+      await widget.dao.insertToDoItem(ToDoItem(title: title));
       setState(() {
-        imageSource = 'images/stop-sign.jpg';
+        todoItems = widget.dao.getAllToDos();
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invalid credentials')),
-      );
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Login Page')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: loginController,
-              decoration: InputDecoration(labelText: 'Login'),
-            ),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: InputDecoration(labelText: 'Password'),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _handleLogin,
-              child: Text('Login'),
-            ),
-            SizedBox(height: 16.0),
-            Image.asset(
-              imageSource,
-              height: 300,
-              width: 300,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ProfilePage extends StatefulWidget {
-  final String username;
-  ProfilePage({required this.username});
-
-  @override
-  _ProfilePageState createState() => _ProfilePageState();
-}
-
-class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController firstNameController = TextEditingController();
-  final TextEditingController lastNameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  void _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
+  void _deleteToDo(ToDoItem item) async {
+    await widget.dao.deleteToDoItem(item);
     setState(() {
-      firstNameController.text = prefs.getString('firstName') ?? '';
-      lastNameController.text = prefs.getString('lastName') ?? '';
-      phoneController.text = prefs.getString('phone') ?? '';
-      emailController.text = prefs.getString('email') ?? '';
+      todoItems = widget.dao.getAllToDos();
     });
   }
 
-  void _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('firstName', firstNameController.text);
-    await prefs.setString('lastName', lastNameController.text);
-    await prefs.setString('phone', phoneController.text);
-    await prefs.setString('email', emailController.text);
-  }
-
-  void _launchPhone() async {
-    final Uri url = Uri.parse('tel:${phoneController.text}');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
-  }
-
-  void _launchSMS() async {
-    final Uri url = Uri.parse('sms:${phoneController.text}');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
-  }
-
-  void _launchEmail() async {
-    final Uri url = Uri.parse('mailto:${emailController.text}');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Profile Page')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text('Welcome Back, ${widget.username}!', style: TextStyle(fontSize: 20)),
-            TextField(controller: firstNameController, decoration: InputDecoration(labelText: 'First Name')),
-            TextField(controller: lastNameController, decoration: InputDecoration(labelText: 'Last Name')),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(controller: phoneController, decoration: InputDecoration(labelText: 'Phone Number')),
-                ),
-                IconButton(icon: Icon(Icons.call), onPressed: _launchPhone),
-                IconButton(icon: Icon(Icons.message), onPressed: _launchSMS),
-              ],
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(controller: emailController, decoration: InputDecoration(labelText: 'Email Address')),
-                ),
-                IconButton(icon: Icon(Icons.email), onPressed: _launchEmail),
-              ],
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _saveData,
-              child: Text('Save Data'),
+      appBar: AppBar(title: Text('To-Do List')),
+      body: FutureBuilder<List<ToDoItem>>(
+        future: todoItems,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(child: Text('No tasks yet. Add some!'));
+          }
+          return ListView(
+            children: snapshot.data!
+                .map((item) => ListTile(
+              title: Text(item.title),
+              trailing: IconButton(
+                icon: Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _deleteToDo(item),
+              ),
+            ))
+                .toList(),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddDialog,
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _showAddDialog() {
+    final TextEditingController _controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Add To-Do'),
+          content: TextField(controller: _controller),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _addToDo(_controller.text);
+                Navigator.of(context).pop();
+              },
+              child: Text('Add'),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
