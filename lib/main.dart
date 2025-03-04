@@ -1,124 +1,129 @@
 import 'package:flutter/material.dart';
-import 'database/app_database.dart';
-import 'models/todo_item.dart';
-import 'dao/todo_dao.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final database =
-  await $FloorAppDatabase.databaseBuilder('app_database.db').build();
-  final dao = database.toDoDao;
-
-  runApp(MyApp(dao: dao));
+void main() {
+  runApp(MaterialApp(
+    home: ShoppingListPage(),
+  ));
 }
 
-class MyApp extends StatelessWidget {
-  final ToDoDao dao;
-
-  MyApp({required this.dao});
-
+class ShoppingListPage extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'To-Do List',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: ToDoListScreen(dao: dao),
-    );
-  }
+  _ShoppingListPageState createState() => _ShoppingListPageState();
 }
 
-class ToDoListScreen extends StatefulWidget {
-  final ToDoDao dao;
+class _ShoppingListPageState extends State<ShoppingListPage> {
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
+  List<Map<String, String>> items = [];
 
-  ToDoListScreen({required this.dao});
-
-  @override
-  _ToDoListScreenState createState() => _ToDoListScreenState();
-}
-
-class _ToDoListScreenState extends State<ToDoListScreen> {
-  late Future<List<ToDoItem>> todoItems;
-
-  @override
-  void initState() {
-    super.initState();
-    todoItems = widget.dao.getAllToDos();
-  }
-
-  void _addToDo(String title) async {
-    if (title.isNotEmpty) {
-      await widget.dao.insertToDoItem(ToDoItem(title: title));
-      setState(() {
-        todoItems = widget.dao.getAllToDos();
-      });
-    }
-  }
-
-  void _deleteToDo(ToDoItem item) async {
-    await widget.dao.deleteToDoItem(item);
+  void _addItem() {
     setState(() {
-      todoItems = widget.dao.getAllToDos();
+      if (_itemController.text.isNotEmpty && _quantityController.text.isNotEmpty) {
+        items.add({
+          'name': _itemController.text,
+          'quantity': _quantityController.text,
+        });
+        _itemController.clear();
+        _quantityController.clear();
+      }
     });
+  }
+
+  void _removeItem(int index) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Delete Item"),
+          content: Text("Are you sure you want to delete ${items[index]['name']}?"),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text("No"),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  items.removeAt(index);
+                });
+                Navigator.of(context).pop();
+              },
+              child: Text("Yes"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('To-Do List')),
-      body: FutureBuilder<List<ToDoItem>>(
-        future: todoItems,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No tasks yet. Add some!'));
-          }
-          return ListView(
-            children: snapshot.data!
-                .map((item) => ListTile(
-              title: Text(item.title),
-              trailing: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () => _deleteToDo(item),
+      appBar: AppBar(
+        title: Text("Flutter Demo Home Page"),
+        backgroundColor: Colors.purple[200],
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _itemController,
+                    decoration: InputDecoration(
+                      hintText: "Type the item here",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _quantityController,
+                    decoration: InputDecoration(
+                      hintText: "Type the quantity here",
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _addItem,
+                  child: Text("Click here"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            Expanded(
+              child: items.isEmpty
+                  ? Center(child: Text("There are no items in the list"))
+                  : ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onLongPress: () => _removeItem(index),
+                    child: Card(
+                      child: ListTile(
+                        title: Text("${index + 1}: ${items[index]['name']}",
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        trailing: Text("Quantity: ${items[index]['quantity']}",
+                            style: TextStyle(color: Colors.grey[600])),
+                      ),
+                    ),
+                  );
+                },
               ),
-            ))
-                .toList(),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
-        child: Icon(Icons.add),
-      ),
-    );
-  }
-
-  void _showAddDialog() {
-    final TextEditingController _controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Add To-Do'),
-          content: TextField(controller: _controller),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _addToDo(_controller.text);
-                Navigator.of(context).pop();
-              },
-              child: Text('Add'),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
