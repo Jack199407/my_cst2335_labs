@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'shared_preferences_helper.dart';
+import 'details_page.dart';
 
 class ShoppingListPage extends StatefulWidget {
   @override
@@ -10,14 +11,14 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
   final TextEditingController _itemController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   List<Map<String, String>> items = [];
+  int? selectedIndex; // 用于响应式布局的当前选中项
 
   @override
   void initState() {
     super.initState();
-    _loadItems(); // 启动时加载数据
+    _loadItems();
   }
 
-  // 🚀 从 SharedPreferences 加载数据
   void _loadItems() async {
     List<Map<String, String>> loadedItems = await SharedPreferencesHelper.loadShoppingList();
     setState(() {
@@ -25,117 +26,141 @@ class _ShoppingListPageState extends State<ShoppingListPage> {
     });
   }
 
-  // 🚀 添加新项目
   void _addItem() {
     if (_itemController.text.isNotEmpty && _quantityController.text.isNotEmpty) {
       setState(() {
         items.add({
           'name': _itemController.text,
           'quantity': _quantityController.text,
+          'id': DateTime.now().millisecondsSinceEpoch.toString(), // 唯一ID
         });
         _itemController.clear();
         _quantityController.clear();
       });
-      SharedPreferencesHelper.saveShoppingList(items); // 存入本地存储
+      SharedPreferencesHelper.saveShoppingList(items);
     }
   }
 
-  // 🚀 删除项目
-  void _removeItem(int index) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Delete Item"),
-          content: Text("Are you sure you want to delete ${items[index]['name']}?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text("No"),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  items.removeAt(index);
-                });
-                SharedPreferencesHelper.saveShoppingList(items); // 更新存储
-                Navigator.of(context).pop();
-              },
-              child: Text("Yes"),
-            ),
-          ],
-        );
-      },
-    );
+  void _deleteItem(int index) {
+    setState(() {
+      items.removeAt(index);
+      selectedIndex = null;
+    });
+    SharedPreferencesHelper.saveShoppingList(items);
+  }
+
+  void _selectItem(int index, bool isWideScreen) {
+    if (isWideScreen) {
+      setState(() {
+        selectedIndex = index;
+      });
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DetailsPage(
+            item: items[index],
+            onDelete: () {
+              _deleteItem(index);
+              Navigator.pop(context);
+            },
+            onClose: () => Navigator.pop(context),
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Flutter Shopping List"),
+        title: Text("Responsive Shopping List"),
         backgroundColor: Colors.purple[200],
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _itemController,
-                    decoration: InputDecoration(
-                      hintText: "Type the item here",
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _quantityController,
-                    decoration: InputDecoration(
-                      hintText: "Type the quantity here",
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: _addItem,
-                  child: Text("Add"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            Expanded(
-              child: items.isEmpty
-                  ? Center(child: Text("No items in the list"))
-                  : ListView.builder(
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onLongPress: () => _removeItem(index),
-                    child: Card(
-                      child: ListTile(
-                        title: Text("${index + 1}: ${items[index]['name']}",
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        trailing: Text("Quantity: ${items[index]['quantity']}",
-                            style: TextStyle(color: Colors.grey[600])),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          bool isWideScreen = constraints.maxWidth > 600; // 判断是否宽屏设备
+          return Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _itemController,
+                              decoration: InputDecoration(
+                                hintText: "Item name",
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _quantityController,
+                              decoration: InputDecoration(
+                                hintText: "Quantity",
+                                border: OutlineInputBorder(),
+                              ),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          ElevatedButton(
+                            onPressed: _addItem,
+                            child: Text("Add"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                },
+                      SizedBox(height: 20),
+                      Expanded(
+                        child: items.isEmpty
+                            ? Center(child: Text("No items in the list"))
+                            : ListView.builder(
+                          itemCount: items.length,
+                          itemBuilder: (context, index) {
+                            return GestureDetector(
+                              onTap: () => _selectItem(index, isWideScreen),
+                              child: Card(
+                                child: ListTile(
+                                  title: Text("${index + 1}: ${items[index]['name']}"),
+                                  trailing: Text("Qty: ${items[index]['quantity']}"),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
+              if (isWideScreen && selectedIndex != null)
+                Expanded(
+                  flex: 3,
+                  child: DetailsPage(
+                    item: items[selectedIndex!],
+                    onDelete: () => _deleteItem(selectedIndex!),
+                    onClose: () {
+                      setState(() {
+                        selectedIndex = null;
+                      });
+                    },
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
